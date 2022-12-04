@@ -2,12 +2,24 @@
 // the scheduling algorithm written by the user resides.
 // User modification should occur within the Run() function.
 
+import java.util.ArrayList;
+import java.util.Hashtable;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.Vector;
 import java.io.*;
 
 public class SchedulingAlgorithm {
 
-  public static Results Run(int runtime, Vector processVector, Results result) {
+  public static Results Run(int runtime, ArrayList<sProcess> processVector, Results result) {
+    Set<sProcess> processSet = new TreeSet<sProcess>(processVector);
+    Hashtable<sProcess, Integer> processToIndex = new Hashtable<>();
+    FairShare fairShare = new FairShare(new TreeSet<sProcess>(processVector));
+
+    for(int i = 0; i < processVector.size(); ++i) {
+      processToIndex.put(processVector.get(i), i);
+    }
+
     int i = 0;
     int comptime = 0;
     int currentProcess = 0;
@@ -17,12 +29,12 @@ public class SchedulingAlgorithm {
     String resultsFile = "Summary-Processes";
 
     result.schedulingType = "Batch (Nonpreemptive)";
-    result.schedulingName = "First-Come First-Served"; 
+    result.schedulingName = "Fair-share"; 
     try {
       //BufferedWriter out = new BufferedWriter(new FileWriter(resultsFile));
       //OutputStream out = new FileOutputStream(resultsFile);
       PrintStream out = new PrintStream(new FileOutputStream(resultsFile));
-      sProcess process = (sProcess) processVector.elementAt(currentProcess);
+      sProcess process = processVector.get(currentProcess);
       out.println("Process: " + currentProcess + " registered... (" + process.cputime + " " + process.ioblocking + " " + process.cpudone + " " + process.cpudone + ")");
       while (comptime < runtime) {
         if (process.cpudone == process.cputime) {
@@ -34,29 +46,25 @@ public class SchedulingAlgorithm {
             return result;
           }
           for (i = size - 1; i >= 0; i--) {
-            process = (sProcess) processVector.elementAt(i);
+            process = processVector.get(i);
             if (process.cpudone < process.cputime) { 
               currentProcess = i;
             }
           }
-          process = (sProcess) processVector.elementAt(currentProcess);
+          process = processVector.get(currentProcess);
           out.println("Process: " + currentProcess + " registered... (" + process.cputime + " " + process.ioblocking + " " + process.cpudone + " " + process.cpudone + ")");
         }      
+        
         if (process.ioblocking == process.ionext) {
           out.println("Process: " + currentProcess + " I/O blocked... (" + process.cputime + " " + process.ioblocking + " " + process.cpudone + " " + process.cpudone + ")");
           process.numblocked++;
           process.ionext = 0; 
           previousProcess = currentProcess;
-          for (i = size - 1; i >= 0; i--) {
-            process = (sProcess) processVector.elementAt(i);
-            if (process.cpudone < process.cputime && previousProcess != i) { 
-              currentProcess = i;
-            }
-          }
-          process = (sProcess) processVector.elementAt(currentProcess);
+          currentProcess = processToIndex.get(fairShare.changeProcess());
+          process = processVector.get(currentProcess);
           out.println("Process: " + currentProcess + " registered... (" + process.cputime + " " + process.ioblocking + " " + process.cpudone + " " + process.cpudone + ")");
-        }        
-        process.cpudone++;       
+        }  
+        fairShare.updateTimeElapsed(process, process.cpudone + 1);
         if (process.ioblocking > 0) {
           process.ionext++;
         }
